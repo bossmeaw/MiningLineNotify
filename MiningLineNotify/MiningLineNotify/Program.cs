@@ -33,9 +33,9 @@ namespace MiningLineNotify
             {
                 while (true)
                 {
-                    _message = string.Format(_message, GetCpuUsage(), GetCpuTemputure(), GetRamUsage(), GetRamTemputure());
+                    string returnMessage = string.Format(_message, GetCpuUsage(), GetCpuTemputure(), GetRamUsage());
 
-                    StringContent content = new StringContent(string.Format("message={0}", _message), Encoding.UTF8, _appType);
+                    StringContent content = new StringContent(string.Format("message={0}", returnMessage), Encoding.UTF8, _appType);
                     HttpResponseMessage result = await _httpClient.PostAsync(_postUri, content);
 
                     Thread.Sleep(10000);
@@ -58,26 +58,32 @@ namespace MiningLineNotify
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(_authScheme, _token);
 
             _message = @"" + System.Environment.NewLine
-                       + "CPU : {0} Percent" + System.Environment.NewLine
-                       + "CPU TEMP : {1} Celsius" + System.Environment.NewLine
-                       + "RAM : {2} Percent" + System.Environment.NewLine
-                       + "RAM TEMP : {3} Celsius" + System.Environment.NewLine;
+                       + "CPU U : {0} Percent" + System.Environment.NewLine
+                       + "CPU T : {1} Celsius" + System.Environment.NewLine
+                       + "RAM U : {2} Percent" + System.Environment.NewLine;
         }
 
         static string GetCpuUsage()
         {
             return GetWmiByScpoeAndQueryAndObjectname(
                 "root\\CIMV2",
-                "SELECT * FROM Win32_PerfFormattedData_Counters_ProcessorInformation",
-                "PercentProcessorTime");
+                "SELECT * FROM Win32_Processor",
+                "LoadPercentage");
         }
 
         static string GetCpuTemputure()
         {
-            return GetWmiByScpoeAndQueryAndObjectname(
+            var resutl = GetWmiByScpoeAndQueryAndObjectname(
                 "root\\WMI",
-                "SELECT * FROM Win32_TemperatureProbe",
+                "SELECT * FROM MSAcpi_ThermalZoneTemperature",
                 "CurrentTemperature");
+
+            int resultInt;
+
+            if (int.TryParse(resutl, out resultInt))
+                return ((resultInt / 10) - 273.15).ToString();
+
+            return "-";
         }
 
         static string GetRamUsage()
@@ -97,16 +103,9 @@ namespace MiningLineNotify
             return Math.Round(((float.Parse(totalVisibleMemorySize) - float.Parse(freePhysicalMemory)) / float.Parse(totalVisibleMemorySize) * 100), 2).ToString();
         }
 
-        static string GetRamTemputure()
-        {
-            return GetWmiByScpoeAndQueryAndObjectname(
-                "root\\WMI",
-                "SELECT * FROM MSAcpi_ThermalZoneTemperature",
-                "CurrentTemperature");
-        }
-
         static string GetWmiByScpoeAndQueryAndObjectname(string scope, string query, string objName)
         {
+            string result = "-";
             try
             {
                 ManagementObjectSearcher searcher = new ManagementObjectSearcher(scope, query);
@@ -115,7 +114,7 @@ namespace MiningLineNotify
                 {
                     if (queryObj[objName] != null)
                     {
-                        return queryObj[objName].ToString();
+                        result = queryObj[objName].ToString();
                     }
                 }
             }
@@ -123,7 +122,7 @@ namespace MiningLineNotify
             {
             }
 
-            return "-";
+            return result;
         }
     }
 }
